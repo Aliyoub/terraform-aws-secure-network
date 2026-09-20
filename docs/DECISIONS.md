@@ -40,3 +40,15 @@
 - **Contexte :** la fonction `cidrcontains` n'existe pas dans Terraform (elle est propre à OpenTofu). `terraform validate` n'a pas détecté l'erreur ; seul `terraform plan` l'a fait.
 - **Décision :** vérifier l'appartenance d'un subnet au VPC avec `cidrhost` : le préfixe du subnet doit être au moins aussi long que celui du VPC, et son adresse, ramenée au préfixe du VPC, doit donner le même réseau.
 - **Conséquences :** la validation fonctionne avec Terraform. Un `plan` reste nécessaire en CI (Phase 6), `validate` seul ne suffit pas.
+
+## ADR-008 : la table de routage principale du VPC est gérée et laissée sans route
+
+- **Contexte :** chaque VPC est créé avec une table de routage principale. Tout subnet qui n'est associé à aucune table explicite l'utilise. Si quelqu'un y ajoutait une route vers l'Internet Gateway, tous ces subnets deviendraient publics sans que ce soit visible dans le code.
+- **Décision :** gérer cette table avec `aws_default_route_table` et `route = []`, et associer explicitement chaque subnet à une table dédiée (publique ou privée).
+- **Conséquences :** un nouveau subnet oublié n'a jamais de sortie vers Internet (comportement « sûr par défaut »), et une route ajoutée à la main dans cette table est supprimée au prochain `apply`, ce qui aide aussi à détecter un drift.
+
+## ADR-009 : une table de routage par niveau, l'Internet Gateway est facultatif dans le module `vpc`
+
+- **Contexte :** un NAT Gateway par zone impose une table privée par zone, mais aucun NAT n'est créé dans cette version.
+- **Décision :** une table publique et une table privée, partagées par les deux zones. L'Internet Gateway est créé par le module `vpc` uniquement si `create_internet_gateway = true` (désactivé par défaut, activé dans `dev`). Les routes sont passées au module `route-table` sous forme de map, ce qui permet d'ajouter plus tard une route vers un NAT sans modifier le module.
+- **Conséquences :** simple et lisible aujourd'hui. Si un NAT par zone est ajouté (Phase 11), il faudra une table privée par zone : le découpage en `for_each` sera alors nécessaire.

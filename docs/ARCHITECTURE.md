@@ -70,3 +70,49 @@ Chacun expose 251 adresses IPv4 disponibles : un `/24` compte 256 adresses et AW
 **Ce que cette capture ne prouve pas encore.** Le nom « public » ou « privé » est une convention de nommage à ce stade. Aucun Internet Gateway n'existe et les quatre subnets utilisent la table de routage principale du VPC, qui ne contient que la route locale. Le caractère public ne viendra que de la table de routage de la Phase 3. La colonne « Bloquer l'accès public » affichée par la console concerne la fonction AWS *VPC Block Public Access*, désactivée par défaut sur le compte ; elle n'est pas un réglage du projet.
 
 **Bonne pratique illustrée.** Un plan d'adressage lisible (`1-9` public, `11-19` privé), des noms et des tags cohérents générés par Terraform, et un déploiement reproductible à partir du code : `terraform plan` prévoyait exactement ces cinq ressources.
+
+## Routage (Phase 3)
+
+```mermaid
+flowchart TB
+    INTERNET(("Internet"))
+    IGW["Internet Gateway"]
+    subgraph VPC["VPC 10.20.0.0/16"]
+        direction TB
+        RTPUB["Table publique<br/>10.20.0.0/16 → local<br/>0.0.0.0/0 → IGW"]
+        RTPRIV["Table privée<br/>10.20.0.0/16 → local<br/>(aucune autre route)"]
+        subgraph PUBLIC["Subnets publics"]
+            PUBA["public-a 10.20.1.0/24"]
+            PUBB["public-b 10.20.2.0/24"]
+        end
+        subgraph PRIVATE["Subnets privés"]
+            PRIVA["private-a 10.20.11.0/24"]
+            PRIVB["private-b 10.20.12.0/24"]
+        end
+        NAT["NAT Gateway (optionnel, non créé)"]
+    end
+    INTERNET <--> IGW
+    IGW --- RTPUB
+    RTPUB --- PUBA
+    RTPUB --- PUBB
+    RTPRIV --- PRIVA
+    RTPRIV --- PRIVB
+    PRIVATE -. "sortie possible uniquement si un NAT est ajouté" .-> NAT
+    NAT -.-> PUBLIC
+```
+
+### Tables de routage
+
+| Table | Associée à | Routes | Effet |
+|---|---|---|---|
+| Publique | `public-a`, `public-b` | `10.20.0.0/16` → local, `0.0.0.0/0` → Internet Gateway | Les subnets peuvent joindre Internet et être joints si une IP publique et des règles de sécurité l'autorisent |
+| Privée | `private-a`, `private-b` | `10.20.0.0/16` → local | Communication interne au VPC uniquement, aucune sortie Internet |
+| Principale du VPC | aucun subnet | `10.20.0.0/16` → local (`route = []`) | Filet de sécurité pour tout subnet non associé (ADR-008) |
+
+### Pourquoi le subnet public est public, et le privé ne l'est pas
+
+Un subnet est public parce que **sa table de routage** contient une route `0.0.0.0/0` vers l'Internet Gateway. La route `10.20.0.0/16 → local` est ajoutée automatiquement par AWS à chaque table : elle permet aux subnets de communiquer entre eux dans le VPC et ne peut pas être supprimée. Les subnets privés n'ont pas de route vers l'IGW, donc aucun trafic ne peut sortir vers Internet ni y être routé. Une sortie Internet pour des ressources privées passerait par un NAT Gateway (qui a un coût), une NAT instance ou des VPC endpoints, qui ne sont pas créés dans cette version.
+
+### Ce que le routage ne suffit pas à garantir
+
+Une route vers l'IGW est nécessaire mais pas suffisante pour exposer une ressource : il faut aussi une IP publique (l'attribution automatique est désactivée, ADR-006) et des règles de Security Group qui autorisent le trafic (Phase 4). Ces trois couches se cumulent.

@@ -37,8 +37,9 @@ locals {
 module "vpc" {
   source = "../../modules/vpc"
 
-  name_prefix = local.name_prefix
-  cidr_block  = var.vpc_cidr
+  name_prefix             = local.name_prefix
+  cidr_block              = var.vpc_cidr
+  create_internet_gateway = true
 }
 
 module "public_subnets" {
@@ -59,5 +60,32 @@ module "private_subnets" {
   subnets     = local.private_subnets
 }
 
-# Phase 2 : VPC et subnets uniquement. Les subnets « public » ne sont pas encore
-# routés vers Internet : l'Internet Gateway et les tables de routage arrivent en Phase 3.
+# Ce qui rend un subnet « public » : sa table de routage contient une route 0.0.0.0/0
+# vers l'Internet Gateway.
+module "public_route_table" {
+  source = "../../modules/route-table"
+
+  name_prefix = local.name_prefix
+  vpc_id      = module.vpc.vpc_id
+  tier        = "public"
+  subnet_ids  = module.public_subnets.subnet_ids
+
+  routes = {
+    internet = {
+      destination_cidr_block = "0.0.0.0/0"
+      gateway_id             = module.vpc.internet_gateway_id
+    }
+  }
+}
+
+# Table privée : aucune route explicite, donc uniquement la route locale du VPC.
+# Une sortie Internet (NAT Gateway, NAT instance ou endpoints) reste une option à activer
+# explicitement, elle n'est jamais créée par défaut.
+module "private_route_table" {
+  source = "../../modules/route-table"
+
+  name_prefix = local.name_prefix
+  vpc_id      = module.vpc.vpc_id
+  tier        = "private"
+  subnet_ids  = module.private_subnets.subnet_ids
+}

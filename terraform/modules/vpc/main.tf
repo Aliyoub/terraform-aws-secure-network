@@ -10,3 +10,27 @@ resource "aws_vpc" "this" {
     Name = "${var.name_prefix}-vpc"
   }
 }
+
+resource "aws_internet_gateway" "this" {
+  count = var.create_internet_gateway ? 1 : 0
+
+  vpc_id = aws_vpc.this.id
+
+  tags = {
+    Name = "${var.name_prefix}-igw"
+  }
+}
+
+# Table de routage principale du VPC, gérée explicitement et volontairement SANS route
+# (seule la route locale du VPC subsiste). Tout subnet qui n'est associé à aucune table
+# dédiée retombe sur celle-ci : il n'a donc jamais de sortie vers Internet par accident.
+resource "aws_default_route_table" "this" {
+  default_route_table_id = aws_vpc.this.default_route_table_id
+
+  # Liste vide explicite : Terraform supprime toute route ajoutée hors de son contrôle.
+  route = []
+
+  tags = {
+    Name = "${var.name_prefix}-main-rt-no-routes"
+  }
+}

@@ -32,3 +32,18 @@ output "availability_zones" {
   description = "Zones de disponibilité utilisées."
   value       = local.az_names
 }
+
+output "internet_gateway_id" {
+  description = "Identifiant de l'Internet Gateway."
+  value       = module.vpc.internet_gateway_id
+}
+
+output "public_route_table_id" {
+  description = "Identifiant de la table de routage publique (route 0.0.0.0/0 vers l'IGW)."
+  value       = module.public_route_table.route_table_id
+}
+
+output "private_route_table_id" {
+  description = "Identifiant de la table de routage privée (route locale uniquement)."
+  value       = module.private_route_table.route_table_id
+}

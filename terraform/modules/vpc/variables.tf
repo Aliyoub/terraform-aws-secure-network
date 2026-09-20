@@ -29,3 +29,9 @@ variable "enable_dns_hostnames" {
   type        = bool
   default     = true
 }
+
+variable "create_internet_gateway" {
+  description = "Crée et attache un Internet Gateway au VPC. L'IGW seul n'expose rien : il faut aussi une route vers lui."
+  type        = bool
+  default     = false
+}
