@@ -17,3 +17,8 @@ output "default_route_table_id" {
   description = "Identifiant de la table de routage principale du VPC (sans route)."
   value       = aws_default_route_table.this.id
 }
+
+output "default_security_group_id" {
+  description = "Identifiant du groupe de sécurité par défaut du VPC (sans règle)."
+  value       = aws_default_security_group.this.id
+}

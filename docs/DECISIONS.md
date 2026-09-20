@@ -52,3 +52,26 @@
 - **Contexte :** un NAT Gateway par zone impose une table privée par zone, mais aucun NAT n'est créé dans cette version.
 - **Décision :** une table publique et une table privée, partagées par les deux zones. L'Internet Gateway est créé par le module `vpc` uniquement si `create_internet_gateway = true` (désactivé par défaut, activé dans `dev`). Les routes sont passées au module `route-table` sous forme de map, ce qui permet d'ajouter plus tard une route vers un NAT sans modifier le module.
 - **Conséquences :** simple et lisible aujourd'hui. Si un NAT par zone est ajouté (Phase 11), il faudra une table privée par zone : le découpage en `for_each` sera alors nécessaire.
+
+## ADR-010 : Security Groups en chaîne `alb -> app -> db`, fermés par défaut
+
+- **Contexte :** l'architecture cible comprend un ALB optionnel, une application privée et une base optionnelle. Aucune de ces ressources n'est créée, mais leurs groupes de sécurité ne coûtent rien et documentent le modèle d'accès.
+- **Décision :** trois groupes, où chaque maillon n'accepte que le trafic du précédent, désigné par **référence à son groupe** et non par un CIDR, et ne sort que vers le suivant. L'entrée Internet du groupe `alb` est pilotée par `alb_allowed_https_cidrs`, **vide par défaut** : rien n'est ouvert tant que cela n'est pas demandé.
+- **Conséquences :** un changement d'adresses IP dans un subnet ne casse aucune règle. Exposer un ALB public est un acte explicite (`["0.0.0.0/0"]`) et visible dans le code. Le groupe `db` n'a aucune règle sortante.
+
+## ADR-011 : aucun SSH, administration sans port entrant
+
+- **Décision :** aucun groupe ne contient de règle sur le port 22. Le module `security-group` rejette à la validation tout SSH (22) ou RDP (3389) ouvert à `0.0.0.0/0`, ainsi que toute règle entrante « tous protocoles ».
+- **Conséquences :** si une instance doit être administrée, on utilisera AWS Systems Manager Session Manager, qui ne demande aucun port entrant, ni IP publique, ni clé SSH à gérer. Session Manager depuis un subnet privé sans NAT exige des VPC endpoints (`ssm`, `ssmmessages`, `ec2messages`) : ils sont facturés à l'heure et à évaluer en Phase 11.
+
+## ADR-012 : groupe de sécurité par défaut adopté et vidé, pas de NACL personnalisée
+
+- **Décision :** le groupe de sécurité par défaut du VPC est géré par Terraform sans aucune règle (`ingress = []`, `egress = []`). Aucune Network ACL personnalisée n'est créée : la NACL par défaut (qui autorise tout) est conservée.
+- **Justification :** les Security Groups, stateful et rattachés aux ressources, portent déjà la segmentation. Une NACL est stateless : il faut autoriser explicitement le trafic retour sur les ports éphémères (1024-65535), ce qui la rend facile à mal configurer pour un bénéfice faible ici. À réévaluer si une exigence de blocage explicite d'adresses (deny) apparaît, cas où seule une NACL convient.
+- **Conséquences :** une seule couche de filtrage à auditer dans cette version. Le compromis est documenté dans `SECURITY.md`.
+
+## ADR-013 : descriptions des règles sans accents ni apostrophes
+
+- **Contexte :** l'API AWS refuse les caractères hors `a-zA-Z0-9. _-:/()#,@[]+=&;{}!$*` dans les descriptions de groupes et de règles. `terraform plan` ne détecte pas l'erreur : elle n'apparaît qu'à l'`apply`.
+- **Décision :** valider ce jeu de caractères dans le module `security-group`.
+- **Conséquences :** l'erreur est détectée dès le `plan`. Les descriptions sont en français sans accents.

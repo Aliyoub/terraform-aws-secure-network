@@ -47,3 +47,17 @@ output "private_route_table_id" {
   description = "Identifiant de la table de routage privée (route locale uniquement)."
   value       = module.private_route_table.route_table_id
 }
+
+output "security_group_ids" {
+  description = "Identifiants des groupes de sécurité, indexés par rôle."
+  value = {
+    alb = module.alb_sg.security_group_id
+    app = module.app_sg.security_group_id
+    db  = module.db_sg.security_group_id
+  }
+}
+
+output "default_security_group_id" {
+  description = "Groupe de sécurité par défaut du VPC (adopté, sans règle)."
+  value       = module.vpc.default_security_group_id
+}

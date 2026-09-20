@@ -74,3 +74,36 @@ variable "private_subnet_cidrs" {
     error_message = "Chaque CIDR de subnet privé doit être valide et inclus dans vpc_cidr."
   }
 }
+
+variable "app_port" {
+  description = "Port TCP sur lequel l'application écoute (trafic autorisé depuis le groupe alb)."
+  type        = number
+  default     = 8080
+
+  validation {
+    condition     = var.app_port >= 1024 && var.app_port <= 65535
+    error_message = "app_port doit être un port non privilégié (1024 à 65535)."
+  }
+}
+
+variable "db_port" {
+  description = "Port TCP de la base de données (trafic autorisé depuis le groupe app). 5432 = PostgreSQL."
+  type        = number
+  default     = 5432
+
+  validation {
+    condition     = var.db_port >= 1 && var.db_port <= 65535
+    error_message = "db_port doit être compris entre 1 et 65535."
+  }
+}
+
+variable "alb_allowed_https_cidrs" {
+  description = "CIDR autorisés à joindre le groupe alb en HTTPS (443). Vide par défaut : aucun accès Internet entrant. Mettre [\"0.0.0.0/0\"] uniquement pour exposer volontairement un ALB public."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for c in var.alb_allowed_https_cidrs : can(cidrhost(c, 0))])
+    error_message = "Chaque entrée de alb_allowed_https_cidrs doit être un CIDR IPv4 valide."
+  }
+}

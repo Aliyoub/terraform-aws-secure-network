@@ -34,3 +34,16 @@ resource "aws_default_route_table" "this" {
     Name = "${var.name_prefix}-main-rt-no-routes"
   }
 }
+
+# Groupe de sécurité par défaut du VPC : adopté et vidé (aucune règle entrante ni sortante).
+# Toute ressource lancée sans groupe explicite n'aurait ainsi aucun accès réseau.
+resource "aws_default_security_group" "this" {
+  vpc_id = aws_vpc.this.id
+
+  ingress = []
+  egress  = []
+
+  tags = {
+    Name = "${var.name_prefix}-default-sg-no-rules"
+  }
+}
