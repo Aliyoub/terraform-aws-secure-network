@@ -2,7 +2,7 @@
 
 Réseau AWS sécurisé (VPC, subnets publics/privés, routage, Security Groups) construit avec Terraform, dans une démarche maîtrisée des coûts : aucune ressource facturable n'est créée par défaut, et chaque démonstration payante est suivie d'un nettoyage vérifié.
 
-> **Statut :** projet en cours. La Phase 1 (squelette du projet) est terminée. Aucune ressource AWS n'est encore déclarée.
+> **Statut :** projet en cours. Phases 1 (squelette) et 2 (code du VPC et des subnets) écrites. Rien n'est encore déployé sur AWS.
 
 ## Objectifs
 
