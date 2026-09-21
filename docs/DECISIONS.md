@@ -75,3 +75,10 @@
 - **Contexte :** l'API AWS refuse les caractères hors `a-zA-Z0-9. _-:/()#,@[]+=&;{}!$*` dans les descriptions de groupes et de règles. `terraform plan` ne détecte pas l'erreur : elle n'apparaît qu'à l'`apply`.
 - **Décision :** valider ce jeu de caractères dans le module `security-group`.
 - **Conséquences :** l'erreur est détectée dès le `plan`. Les descriptions sont en français sans accents.
+
+## ADR-014 : validation locale par script, tflint installé depuis la release officielle
+
+- **Contexte :** `terraform validate` ne vérifie que la syntaxe et la cohérence interne (il n'a pas détecté `cidrcontains`, voir ADR-007). Il faut une analyse statique complémentaire et un moyen de rejouer les mêmes contrôles à la main et en CI (Phase 6).
+- **Décision :** `scripts/validate.sh` enchaîne `terraform fmt -check`, `init -backend=false` et `validate`, `tflint` (règles Terraform recommandées et règles AWS, plugin AWS épinglé en `0.49.0`), un garde-fou de coût et une recherche de secrets. `tflint` est installé depuis le binaire de la release GitHub, dont l'empreinte SHA-256 a été comparée à `checksums.txt`, la formule Homebrew étant introuvable sur cette machine.
+- **Garde-fou de coût :** `scripts/check-aws-cost-risk.sh` échoue si le code déclare une ressource potentiellement payante (NAT Gateway, Elastic IP, load balancer, instance, base, endpoint, Flow Logs, etc.), sauf `ALLOW_PAID_RESOURCES=1`. C'est une analyse statique : elle ne remplace ni le `plan` ni la vérification des tarifs.
+- **Conséquences :** aucun appel AWS ni ressource créée pendant ces contrôles. La recherche de secrets par motifs est volontairement simple (clé d'accès, clé secrète, clé privée) et ne remplace pas un vrai scanner. Les scripts ont été validés avec des cas témoins qui doivent échouer.

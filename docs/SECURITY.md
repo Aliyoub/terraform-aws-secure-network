@@ -45,3 +45,25 @@ Une NACL personnalisée n'apporte pas ici de bénéfice qui justifie sa complexi
 | Pas de NACL personnalisée | Simplicité, moins d'erreurs possibles | Pas de blocage explicite d'adresses au niveau subnet |
 | Groupes `alb` et `db` créés sans ressource associée | Modèle d'accès documenté et prêt | Groupes inutilisés tant que l'ALB et la base ne sont pas déployés |
 | State Terraform local | Pas de bucket à sécuriser à ce stade | Pas de verrouillage ni de partage (ADR-003) |
+
+## Contrôles avant commit
+
+![Exécution de scripts/validate.sh : les cinq contrôles réussissent](../screenshots/02-validate-script.png)
+
+*Terminal, exécution de `scripts/validate.sh` à la racine du dépôt.*
+
+**Ce que montre la capture.** Le script enchaîne cinq contrôles, tous en `OK`, puis affiche « tous les contrôles sont passés » :
+
+| Étape | Contrôle | Ce qu'il évite |
+|---|---|---|
+| 1 | `terraform fmt -check` | Un formatage incohérent qui pollue les revues de code |
+| 2 | `terraform init -backend=false` puis `validate` | Une configuration invalide ou incohérente |
+| 3 | `tflint` (règles Terraform et AWS) | Des erreurs de fond que `validate` ne voit pas : valeur refusée par AWS, variable inutilisée, module non épinglé |
+| 4 | Garde-fou de coût | L'ajout accidentel d'une ressource payante (NAT Gateway, Elastic IP, load balancer, instance, base, etc.) |
+| 5 | Recherche de secrets | Un fichier de state, un `.tfvars`, une clé privée ou une clé d'accès AWS suivis par Git |
+
+**Pourquoi cette configuration.** Ces contrôles ne font aucun appel AWS et ne créent aucune ressource : ils peuvent être rejoués sans risque de coût, à chaque commit, et par la CI. Le garde-fou de coût rend visible toute ressource facturable dès la revue du code, avant même un `plan`. L'analyse de `tflint` complète `validate`, qui n'avait pas détecté l'usage d'une fonction inexistante (ADR-007).
+
+**Ce que ce script ne garantit pas.** La recherche de secrets ne repose que sur quelques motifs (clé d'accès AWS, clé secrète, clé privée) : elle ne remplace pas un véritable scanner. Le garde-fou de coût est une analyse statique du code : il ne vérifie ni les tarifs ni ce qui existe réellement sur le compte. Un `terraform plan` reste nécessaire avant tout déploiement.
+
+**Bonne pratique illustrée.** Des contrôles automatisés et reproductibles « à gauche » (avant le commit) plutôt qu'une découverte tardive en production, et des contrôles eux-mêmes testés avec des cas défectueux pour prouver qu'ils échouent quand il le faut (ADR-014).
