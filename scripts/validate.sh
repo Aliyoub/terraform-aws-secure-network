@@ -12,8 +12,11 @@ set -euo pipefail
 
 cd "$(dirname "$0")/.."
 root="$(pwd)"
-env_dir="terraform/environments/dev"
 failures=0
+
+# Chaque environnement (dev, bootstrap, ...) est un module racine indépendant,
+# avec son propre state : tous doivent être validés.
+env_dirs=(terraform/environments/*/)
 
 step() { printf '\n== %s ==\n' "$1"; }
 fail() { printf 'ÉCHEC : %s\n' "$1" >&2; failures=$((failures + 1)); }
@@ -26,21 +29,27 @@ else
 fi
 
 step "2/5 terraform init (sans backend) et validate"
-if (cd "$env_dir" && terraform init -backend=false -input=false -no-color >/dev/null \
-    && terraform validate -no-color); then
-  :
-else
-  fail "terraform init ou validate a échoué"
-fi
+for env_dir in "${env_dirs[@]}"; do
+  echo "-- $env_dir --"
+  if (cd "$env_dir" && terraform init -backend=false -input=false -no-color >/dev/null \
+      && terraform validate -no-color); then
+    :
+  else
+    fail "terraform init ou validate a échoué pour $env_dir"
+  fi
+done
 
 step "3/5 tflint"
 if command -v tflint >/dev/null 2>&1; then
   tflint --init >/dev/null
-  if (cd "$env_dir" && tflint --config="$root/.tflint.hcl"); then
-    echo "OK"
-  else
-    fail "tflint a signalé des problèmes"
-  fi
+  for env_dir in "${env_dirs[@]}"; do
+    echo "-- $env_dir --"
+    if (cd "$env_dir" && tflint --config="$root/.tflint.hcl"); then
+      echo "OK"
+    else
+      fail "tflint a signalé des problèmes pour $env_dir"
+    fi
+  done
 else
   echo "tflint non installé : étape ignorée (non vérifié)."
 fi

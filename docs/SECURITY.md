@@ -93,3 +93,37 @@ Le workflow `terraform-validate` applique ces règles (ADR-015) :
 **Ce que montre la capture.** Le run passe en `Success`, en 22 secondes, avec un seul job (`fmt, validate, tflint, coût, secrets`) réussi en 17 secondes. Une annotation informative de GitHub signale la migration future du runner `ubuntu-latest` vers Ubuntu 26 : elle ne concerne pas le code du projet et ne demande aucune action immédiate.
 
 **Pourquoi cette preuve est importante.** Un script qui réussit en local (`screenshots/02-validate-script.png`) ne garantit pas qu'il réussit dans l'environnement propre et isolé d'une CI, où rien n'est présent par défaut (pas de `.terraform/`, pas de cache). Ce run confirme que la CI installe elle-même Terraform et tflint, puis exécute les mêmes contrôles, sans intervention manuelle.
+
+## OIDC : authentification de la CI sans clé statique
+
+`terraform/environments/bootstrap/` crée, une fois et à la main, ce que la CI utilisera ensuite pour s'authentifier :
+
+```mermaid
+sequenceDiagram
+    participant GH as Workflow GitHub Actions
+    participant OIDC as token.actions.githubusercontent.com
+    participant STS as AWS STS
+    participant IAM as Rôle IAM (lecture seule)
+
+    GH->>OIDC: Demande un jeton d'identité (OIDC)
+    OIDC-->>GH: Jeton signé (aud, sub = repo + branche/PR)
+    GH->>STS: AssumeRoleWithWebIdentity (jeton)
+    STS->>IAM: Vérifie la politique de confiance (aud, sub)
+    IAM-->>STS: Conditions respectées
+    STS-->>GH: Credentials temporaires (< 1 h)
+```
+
+**Pourquoi OIDC plutôt qu'une clé d'accès AWS stockée dans GitHub.** Une clé statique ne périme jamais d'elle-même, se fuite facilement (secret GitHub mal configuré, log, fork) et donne le même accès à quiconque la possède. Un jeton OIDC est émis à la demande, expire en moins d'une heure, et n'existe que pour le job qui l'a demandé.
+
+**Ce que vérifie la politique de confiance du rôle.**
+
+| Condition | Valeur exigée | Empêche |
+|---|---|---|
+| `aud` (audience) | `sts.amazonaws.com` | Un jeton émis pour un autre service d'endosser ce rôle |
+| `sub` (sujet) | `repo:Aliyoub/terraform-aws-secure-network:ref:refs/heads/main` ou `repo:Aliyoub/terraform-aws-secure-network:pull_request` | Un fork ou un autre dépôt d'endosser ce rôle, même en connaissant son ARN |
+
+L'ARN du rôle n'est pas un secret : seule une organisation GitHub qui contrôle ce dépôt précis peut produire un jeton dont le `sub` correspond.
+
+**Ce que peut faire le rôle, et ce qu'il ne peut pas faire.** Sa politique de permissions ne contient que des actions `ec2:Describe*`, limitées aux types de ressources actuellement définis dans ce projet (ADR-017). Aucune action de création, modification ou suppression. Il ne peut donc jamais servir à un `apply` : c'est une limite technique, pas seulement une convention du workflow.
+
+**Bootstrap : un paradoxe de démarrage assumé.** Le fournisseur OIDC et le rôle ne peuvent pas être créés par la CI elle-même, puisqu'elle n'a pas encore d'accès avant leur existence. Ils sont donc appliqués une fois, à la main, avec un accès humain déjà privilégié (ADR-016). C'est la pratique normale : un humain autorisé met en place un accès machine restreint, jamais l'inverse.

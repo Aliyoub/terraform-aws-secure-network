@@ -90,3 +90,16 @@
 - **Permissions :** `contents: read` uniquement, définies au niveau du workflow. Le checkout n'enregistre pas le jeton (`persist-credentials: false`).
 - **Chaîne d'approvisionnement :** les trois actions (`checkout`, `setup-terraform`, `setup-tflint`) sont épinglées sur le SHA d'un commit, avec la version en commentaire, car un tag peut être déplacé vers un autre code. Les versions de Terraform (1.16.1) et de tflint (v0.64.0) sont fixées. `terraform init` est lancé avec `-lockfile=readonly` : si le fichier de verrouillage devait changer, la CI échoue au lieu d'accepter silencieusement un autre provider.
 - **Conséquences :** l'épinglage par SHA impose de mettre les actions à jour à la main (ou via un outil de suivi des dépendances). Le plan Terraform, qui a besoin d'un accès AWS en lecture, viendra avec OIDC (Phase 7).
+
+## ADR-016 : bootstrap OIDC/IAM dans un environnement Terraform séparé
+
+- **Contexte :** le fournisseur OIDC de GitHub Actions et le rôle IAM qu'il peut endosser sont des ressources IAM globales, prérequises pour que la CI accède au compte. Elles ne peuvent pas être créées par la CI elle-même (problème de démarrage) et leur cycle de vie ne doit pas dépendre de celui du réseau `dev`.
+- **Décision :** `terraform/environments/bootstrap/`, un module racine et un state distincts de `dev`. Ce module s'applique une fois, à la main, avec les credentials personnels déjà utilisés dans ce projet.
+- **Conséquences :** détruire ou reconstruire le réseau `dev` n'affecte jamais l'accès de la CI. `scripts/validate.sh` valide désormais tous les environnements sous `terraform/environments/*/`, pas seulement `dev`.
+
+## ADR-017 : rôle IAM OIDC restreint au dépôt, en lecture seule, sans clé statique
+
+- **Contexte :** la CI doit pouvoir exécuter un `terraform plan` fidèle à l'état réel du compte, sans jamais pouvoir le modifier, et sans qu'une clé d'accès AWS soit stockée dans GitHub.
+- **Décision :** un fournisseur OIDC (`token.actions.githubusercontent.com`) et un rôle dont la politique de confiance vérifie `aud = sts.amazonaws.com` et restreint le claim `sub` au dépôt `Aliyoub/terraform-aws-secure-network`, à la branche `main` et aux pull requests de ce dépôt. La politique de permissions ne contient que des actions `ec2:Describe*` sur les types de ressources actuellement définis : aucune action de création, modification ou suppression.
+- **Empreinte du certificat :** calculée le 22/09/2026 avec `openssl s_client -connect token.actions.githubusercontent.com:443 -showcerts`, en prenant l'empreinte SHA-1 du dernier certificat de la chaîne renvoyée par le serveur. Ma première tentative, écrite de mémoire, était fausse (39 caractères au lieu de 40) : `terraform validate` l'a détectée avant tout appel AWS, ce qui illustre l'intérêt de ce contrôle.
+- **Conséquences :** un fork du dépôt ou un autre dépôt ne peut pas endosser ce rôle. La liste d'actions doit être étendue au fur et à mesure des ressources ajoutées (jamais par anticipation). Le rôle ne permet aucun `apply`, en CI ou ailleurs : cette limite reste humaine.
