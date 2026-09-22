@@ -120,7 +120,9 @@ sequenceDiagram
 | Condition | Valeur exigée | Empêche |
 |---|---|---|
 | `aud` (audience) | `sts.amazonaws.com` | Un jeton émis pour un autre service d'endosser ce rôle |
-| `sub` (sujet) | `repo:Aliyoub/terraform-aws-secure-network:ref:refs/heads/main` ou `repo:Aliyoub/terraform-aws-secure-network:pull_request` | Un fork ou un autre dépôt d'endosser ce rôle, même en connaissant son ARN |
+| `sub` (sujet) | `repo:Aliyoub@25158336/terraform-aws-secure-network@1378078820:ref:refs/heads/main` ou `...:pull_request` | Un fork ou un autre dépôt d'endosser ce rôle, même en connaissant son ARN |
+
+Le `sub` inclut les identifiants immuables du compte et du dépôt (`@25158336`, `@1378078820`) : GitHub les ajoute par défaut pour tout dépôt créé après le 15/07/2026, ce qui protège en plus contre un renommage ou un transfert du dépôt. Voir l'incident documenté en ADR-017.
 
 L'ARN du rôle n'est pas un secret : seule une organisation GitHub qui contrôle ce dépôt précis peut produire un jeton dont le `sub` correspond.
 
@@ -138,7 +140,7 @@ L'ARN du rôle n'est pas un secret : seule une organisation GitHub qui contrôle
 
 *Même rôle, onglet « Relations d'approbation ». L'ID de compte AWS a été masqué avant publication.*
 
-**Ce que montrent ces captures.** Le rôle n'a qu'une seule politique attachée (`...-plan-policy`), qui n'autorise que des actions `ec2:Describe*` : aucune création, modification ou suppression n'est possible avec ce rôle, quelle que soit la façon dont il serait détourné. Sa politique de confiance montre les deux conditions qui protègent son usage : `aud` vérifie que le jeton a été émis pour AWS STS, et `sub` le restreint au dépôt `Aliyoub/terraform-aws-secure-network`, sur la branche `main` ou pour une pull request de ce dépôt.
+**Ce que montrent ces captures.** Le rôle n'a qu'une seule politique attachée (`...-plan-policy`), qui n'autorise que des actions `ec2:Describe*` : aucune création, modification ou suppression n'est possible avec ce rôle, quelle que soit la façon dont il serait détourné. Sa politique de confiance montre les deux conditions qui protègent son usage : `aud` vérifie que le jeton a été émis pour AWS STS, et `sub` le restreint au dépôt `Aliyoub/terraform-aws-secure-network` (identifié par ses identifiants immuables), sur la branche `main` ou pour une pull request de ce dépôt. La capture 06 correspond à la politique corrigée après l'incident de l'ADR-017 ; une première version, restreinte au format simple `owner/repo`, avait empêché tout run d'aboutir.
 
 **Pourquoi l'ID de compte est masqué.** Il n'est pas un secret exploitable seul (ce n'est ni une clé d'accès ni un mot de passe), mais il facilite le repérage et le ciblage d'un compte. Il est masqué dans les captures publiées par précaution, alors que le reste de la politique — sans valeur d'identification à lui seul — reste lisible.
 
