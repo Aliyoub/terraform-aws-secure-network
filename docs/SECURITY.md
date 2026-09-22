@@ -24,6 +24,20 @@ Les groupes forment une chaîne `alb -> app -> db`. Un **Security Group est stat
 - **Administration :** AWS Systems Manager Session Manager, sans port entrant ni clé SSH. Il nécessite des VPC endpoints pour un subnet privé sans NAT (coût à évaluer en Phase 11).
 - **Sorties restreintes :** l'usage habituel d'un `0.0.0.0/0` en sortie est volontairement absent. Sans NAT, un subnet privé n'a de toute façon aucune route vers Internet ; les règles sortantes limitent en plus le trafic *interne*.
 
+### Preuve de déploiement : la chaîne par référence, pas par CIDR
+
+![Règle entrante du groupe app : source = groupe alb, port 8080](../screenshots/09-security-groups.png)
+
+*Console AWS, groupe `terraform-aws-secure-network-dev-app-sg`, onglet « Règles entrantes ».*
+
+![Règle entrante du groupe db : source = groupe app, port 5432](../screenshots/10-security-group-db.png)
+
+*Groupe `terraform-aws-secure-network-dev-db-sg`, onglet « Règles entrantes ».*
+
+**Ce que montrent ces deux captures.** Dans les deux cas, la colonne « Source » contient un **autre Security Group** (`sg-0662670c301cf4cec / ...-alb-sg` pour `app`, `sg-02940bd36b4c46fe2 / ...-app-sg` pour `db`) et non une plage d'adresses IP. La chaîne complète est ainsi prouvée sur l'infrastructure réellement déployée : `alb` (443, fermé par défaut) → `app` (8080, uniquement depuis `alb`) → `db` (5432, uniquement depuis `app`). Aucun maillon n'accepte de trafic depuis `0.0.0.0/0`, et aucune règle sur le port 22 n'existe nulle part dans ce projet (vérifié par `scripts/check-aws-cost-risk.sh` et par relecture manuelle de ces captures).
+
+**Pourquoi c'est plus robuste qu'un CIDR.** Si l'adresse IP d'une ressource du groupe `alb` change, la règle reste valide : elle référence le groupe, pas une adresse. À l'inverse, elle ne peut jamais être élargie par erreur à un sous-réseau entier.
+
 ## Security Group ou Network ACL ?
 
 | | Security Group | Network ACL |
