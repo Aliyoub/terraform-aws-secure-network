@@ -2,26 +2,63 @@
 
 Réseau AWS sécurisé (VPC, subnets publics/privés, routage, Security Groups) construit avec Terraform, dans une démarche maîtrisée des coûts : aucune ressource facturable n'est créée par défaut, et chaque démonstration payante est suivie d'un nettoyage vérifié.
 
-> **Statut :** projet en cours. Phases 1 (squelette) et 2 (code du VPC et des subnets) écrites. Rien n'est encore déployé sur AWS.
+[![terraform-validate](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-validate.yml)
 
-## Objectifs
+> **Statut :** phases 1 à 6 écrites (structure, VPC et subnets, routage, Security Groups, contrôles locaux, CI de validation). OIDC/IAM (Phase 7) et premier déploiement complet (Phase 8) à venir.
 
-- Concevoir un VPC multi-AZ avec une segmentation stricte entre subnets publics et privés.
-- Appliquer le principe du moindre privilège aux Security Groups (aucun SSH public).
-- Authentifier la CI auprès d'AWS avec GitHub OIDC, sans clé d'accès statique.
-- Rendre les coûts explicites : NAT Gateway, load balancers, Flow Logs et endpoints sont optionnels et désactivés par défaut.
+## Vue d'ensemble
+
+```mermaid
+flowchart TB
+    INTERNET(("Internet"))
+    IGW["Internet Gateway"]
+    subgraph VPC["VPC 10.20.0.0/16 (eu-west-3)"]
+        direction TB
+        RTPUB["Table publique<br/>0.0.0.0/0 → IGW"]
+        RTPRIV["Table privée<br/>aucune route externe"]
+        subgraph PUBLIC["Subnets publics (2 AZ)"]
+            SGALB["SG alb<br/>443 fermé par défaut"]
+        end
+        subgraph PRIVATE["Subnets privés (2 AZ)"]
+            SGAPP["SG app<br/>entrée depuis alb"]
+            SGDB["SG db<br/>entrée depuis app"]
+        end
+    end
+    INTERNET <--> IGW --- RTPUB --- PUBLIC
+    RTPRIV --- PRIVATE
+    SGALB -. "8080" .-> SGAPP -. "5432" .-> SGDB
+```
+
+Détails complets, plan d'adressage et justifications : [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md).
+
+## Ce que démontre le projet
+
+- **Réseau :** VPC `10.20.0.0/16` multi-AZ, subnets publics et privés segmentés par le routage (une route `0.0.0.0/0` vers l'Internet Gateway ne fait un subnet public que si elle existe dans sa table).
+- **Sécurité :** Security Groups en chaîne `alb → app → db`, référencés entre eux plutôt que par CIDR, aucun SSH exposé, groupe de sécurité et table de routage par défaut du VPC vidés.
+- **Infrastructure as Code :** modules Terraform réutilisables (`vpc`, `subnet`, `route-table`, `security-group`), variables validées, tags cohérents, `.terraform.lock.hcl` commité.
+- **Qualité et coûts :** `scripts/validate.sh` (fmt, validate, tflint, garde-fou de coût, recherche de secrets), testé avec des cas défectueux volontaires pour prouver qu'il détecte bien les problèmes.
+- **CI :** GitHub Actions exécute les mêmes contrôles à chaque push, sans accès AWS, avec des actions tierces épinglées sur un SHA de commit et des permissions en lecture seule.
+- **Démarche :** chaque décision est documentée (ADR), chaque ressource payante potentielle listée avant création, chaque déploiement de démonstration suivi d'un `terraform destroy` vérifié indépendamment de l'état AWS.
 
 ## Structure du dépôt
 
 ```
 terraform/
-  modules/              modules réutilisables (ajoutés phase par phase)
+  modules/              vpc, subnet, route-table, security-group
   environments/dev/     module racine de l'environnement dev
-docs/                   architecture, sécurité, coûts, décisions, dépannage
+docs/                   architecture, sécurité, décisions (coûts et dépannage à venir)
 screenshots/            preuves capturées au fil du projet
-scripts/                scripts de validation et de nettoyage
-.github/workflows/      CI (validate, plan). Aucun apply automatique
+scripts/                validate.sh, check-aws-cost-risk.sh (cleanup.sh à venir)
+.github/workflows/      CI (validate). Aucun apply automatique
 ```
+
+## Documentation
+
+| Document | Contenu |
+|---|---|
+| [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | Plan d'adressage, diagrammes, routage, captures commentées |
+| [`docs/SECURITY.md`](docs/SECURITY.md) | Security Groups, Security Group vs NACL, arbitrages de sécurité, CI |
+| [`docs/DECISIONS.md`](docs/DECISIONS.md) | Décisions d'architecture (ADR), avec leur contexte et leurs conséquences |
 
 ## Utilisation
 
@@ -30,9 +67,25 @@ cd terraform/environments/dev
 terraform init
 terraform fmt -check
 terraform validate
+
+# Rejoue localement les contrôles de la CI (aucun accès AWS)
+../../../scripts/validate.sh
 ```
 
 `terraform apply` n'est jamais exécuté automatiquement.
+
+## Avancement
+
+| Phase | Contenu | État |
+|---|---|---|
+| 1 | Structure du projet | ✅ |
+| 2 | VPC, subnets multi-AZ | ✅ (code + preuve déployée) |
+| 3 | Routage (IGW, tables) | ✅ (code) |
+| 4 | Security Groups | ✅ (code) |
+| 5 | Validation locale (tflint, scripts) | ✅ |
+| 6 | GitHub Actions | ✅ |
+| 7 | OIDC / IAM | à venir |
+| 8-13 | Déploiement, tests, troubleshooting, cleanup final | à venir |
 
 ## Auteur
 

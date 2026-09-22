@@ -83,3 +83,13 @@ Le workflow `terraform-validate` applique ces règles (ADR-015) :
 | Aucun `terraform apply` | La CI ne peut rien déployer |
 
 **Limite :** l'épinglage par SHA protège contre le déplacement d'un tag, pas contre une action déjà malveillante au moment où on l'épingle. Le SHA doit être relu à chaque mise à jour.
+
+### Preuve d'exécution
+
+![Premier run du workflow terraform-validate, réussi en 22 secondes](../screenshots/03-github-actions-validate.png)
+
+*GitHub, onglet Actions, run déclenché par le push du commit `a678597` sur `main`.*
+
+**Ce que montre la capture.** Le run passe en `Success`, en 22 secondes, avec un seul job (`fmt, validate, tflint, coût, secrets`) réussi en 17 secondes. Une annotation informative de GitHub signale la migration future du runner `ubuntu-latest` vers Ubuntu 26 : elle ne concerne pas le code du projet et ne demande aucune action immédiate.
+
+**Pourquoi cette preuve est importante.** Un script qui réussit en local (`screenshots/02-validate-script.png`) ne garantit pas qu'il réussit dans l'environnement propre et isolé d'une CI, où rien n'est présent par défaut (pas de `.terraform/`, pas de cache). Ce run confirme que la CI installe elle-même Terraform et tflint, puis exécute les mêmes contrôles, sans intervention manuelle.
