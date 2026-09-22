@@ -1,0 +1,56 @@
+name: terraform-validate
+
+# Rejoue les contrôles locaux (scripts/validate.sh) : formatage, validation, tflint,
+# garde-fou de coût, recherche de secrets.
+# Aucun accès à AWS, aucun secret, aucun apply : ce workflow ne peut rien créer.
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+# Moindre privilège : lecture du code uniquement.
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+  # Échoue si .terraform.lock.hcl devait être modifié : les versions du provider restent figées.
+  TF_CLI_ARGS_init: "-lockfile=readonly"
+
+jobs:
+  validate:
+    name: fmt, validate, tflint, coût, secrets
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      # Actions épinglées sur le SHA d'un commit (un tag peut être déplacé). Version en commentaire.
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.1
+          terraform_wrapper: false
+
+      - name: Installer tflint
+        uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
+        with:
+          tflint_version: v0.64.0
+          github_token: ${{ github.token }}
+
+      - name: Exécuter les contrôles
+        env:
+          # Utilisé par tflint --init pour télécharger le plugin AWS sans être limité par l'API GitHub.
+          GITHUB_TOKEN: ${{ github.token }}
+        run: scripts/validate.sh

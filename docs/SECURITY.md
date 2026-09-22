@@ -67,3 +67,19 @@ Une NACL personnalisée n'apporte pas ici de bénéfice qui justifie sa complexi
 **Ce que ce script ne garantit pas.** La recherche de secrets ne repose que sur quelques motifs (clé d'accès AWS, clé secrète, clé privée) : elle ne remplace pas un véritable scanner. Le garde-fou de coût est une analyse statique du code : il ne vérifie ni les tarifs ni ce qui existe réellement sur le compte. Un `terraform plan` reste nécessaire avant tout déploiement.
 
 **Bonne pratique illustrée.** Des contrôles automatisés et reproductibles « à gauche » (avant le commit) plutôt qu'une découverte tardive en production, et des contrôles eux-mêmes testés avec des cas défectueux pour prouver qu'ils échouent quand il le faut (ADR-014).
+
+## GitHub Actions : permissions et chaîne d'approvisionnement
+
+Le workflow `terraform-validate` applique ces règles (ADR-015) :
+
+| Mesure | Effet |
+|---|---|
+| `permissions: contents: read` | Le jeton du workflow ne peut que lire le code : il ne peut ni pousser, ni modifier les pull requests, ni créer de release |
+| Aucun secret, aucun accès AWS | Un workflow compromis ne peut ni créer, ni lire de ressources AWS |
+| `persist-credentials: false` | Le jeton n'est pas laissé dans la configuration Git du runner |
+| Actions épinglées sur un SHA de commit | Une action tierce dont le tag serait détourné ne peut pas injecter de code dans la CI |
+| Versions de Terraform et de tflint fixées | Les mêmes règles s'appliquent à chaque exécution |
+| `terraform init -lockfile=readonly` | Le provider ne peut pas changer sans modification visible de `.terraform.lock.hcl` |
+| Aucun `terraform apply` | La CI ne peut rien déployer |
+
+**Limite :** l'épinglage par SHA protège contre le déplacement d'un tag, pas contre une action déjà malveillante au moment où on l'épingle. Le SHA doit être relu à chaque mise à jour.
