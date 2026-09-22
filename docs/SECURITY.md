@@ -127,3 +127,19 @@ L'ARN du rôle n'est pas un secret : seule une organisation GitHub qui contrôle
 **Ce que peut faire le rôle, et ce qu'il ne peut pas faire.** Sa politique de permissions ne contient que des actions `ec2:Describe*`, limitées aux types de ressources actuellement définis dans ce projet (ADR-017). Aucune action de création, modification ou suppression. Il ne peut donc jamais servir à un `apply` : c'est une limite technique, pas seulement une convention du workflow.
 
 **Bootstrap : un paradoxe de démarrage assumé.** Le fournisseur OIDC et le rôle ne peuvent pas être créés par la CI elle-même, puisqu'elle n'a pas encore d'accès avant leur existence. Ils sont donc appliqués une fois, à la main, avec un accès humain déjà privilégié (ADR-016). C'est la pratique normale : un humain autorisé met en place un accès machine restreint, jamais l'inverse.
+
+### Preuve de déploiement
+
+![Politique de permissions du rôle : une seule politique, en lecture seule](../screenshots/05-iam-oidc-role-permissions.png)
+
+*Console AWS, IAM → Rôles → `terraform-aws-secure-network-github-actions-plan`, onglet « Autorisations ».*
+
+![Politique de confiance du rôle : sub restreint au dépôt, ID de compte masqué](../screenshots/06-iam-oidc-role-trust.png)
+
+*Même rôle, onglet « Relations d'approbation ». L'ID de compte AWS a été masqué avant publication.*
+
+**Ce que montrent ces captures.** Le rôle n'a qu'une seule politique attachée (`...-plan-policy`), qui n'autorise que des actions `ec2:Describe*` : aucune création, modification ou suppression n'est possible avec ce rôle, quelle que soit la façon dont il serait détourné. Sa politique de confiance montre les deux conditions qui protègent son usage : `aud` vérifie que le jeton a été émis pour AWS STS, et `sub` le restreint au dépôt `Aliyoub/terraform-aws-secure-network`, sur la branche `main` ou pour une pull request de ce dépôt.
+
+**Pourquoi l'ID de compte est masqué.** Il n'est pas un secret exploitable seul (ce n'est ni une clé d'accès ni un mot de passe), mais il facilite le repérage et le ciblage d'un compte. Il est masqué dans les captures publiées par précaution, alors que le reste de la politique — sans valeur d'identification à lui seul — reste lisible.
+
+**Ce que ces captures prouvent ensemble.** Le fournisseur OIDC et le rôle existent réellement sur le compte AWS (et non seulement dans le code Terraform), avec exactement les restrictions décrites dans `ARCHITECTURE.md` et les ADR 016-017 : lecture seule, dépôt unique, aucune clé statique.
