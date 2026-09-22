@@ -1,0 +1,82 @@
+name: terraform-plan
+
+# Authentifie la CI auprès d'AWS via OIDC (rôle en lecture seule, Phase 7) et exécute
+# un terraform plan sur l'environnement dev. Aucun secret, aucune clé statique, aucun apply.
+#
+# LIMITE ASSUMÉE : le state de dev est local (ADR-003), jamais partagé avec la CI. Ce plan
+# repart donc toujours d'un state vide : il affiche "N à créer" même quand les ressources
+# existent déjà sur AWS. Il ne détecte pas de dérive. Sa valeur réelle : confirmer que la
+# configuration reste déployable contre le vrai compte (résolution des data sources, région,
+# permissions), ce qu'un terraform validate seul ne peut pas garantir. Voir docs/SECURITY.md.
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - "terraform/environments/dev/**"
+      - "terraform/modules/**"
+      - ".github/workflows/terraform-plan.yml"
+  pull_request:
+    paths:
+      - "terraform/environments/dev/**"
+      - "terraform/modules/**"
+      - ".github/workflows/terraform-plan.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  TF_IN_AUTOMATION: "true"
+  TF_INPUT: "0"
+  TF_CLI_ARGS_init: "-lockfile=readonly"
+  AWS_REGION: eu-west-3
+
+jobs:
+  plan:
+    name: terraform plan (dev)
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # Défense en profondeur, en plus de la restriction "sub" de la politique de confiance
+    # IAM (ADR-017) : une pull request depuis un fork n'obtient jamais de credentials AWS,
+    # même si elle déclenche ce workflow. Le state étant local et vide en CI (voir ci-dessus),
+    # ce plan ne fait de toute façon que créer, jamais modifier de ressource réelle - mais
+    # cette garde reste la bonne pratique par défaut pour tout job qui assume un rôle AWS.
+    if: github.event_name != 'pull_request' || github.event.pull_request.head.repo.full_name == github.repository
+
+    permissions:
+      contents: read
+      id-token: write # requis pour obtenir le jeton OIDC
+
+    steps:
+      - name: Récupérer le code
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Authentification AWS via OIDC
+        uses: aws-actions/configure-aws-credentials@e1253824e5c10ff9df46874f81ed3ec929e19cfd # v6.3.0
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ vars.AWS_OIDC_PLAN_ROLE_ARN }}
+          role-session-name: gha-terraform-plan
+          mask-aws-account-id: true
+
+      - name: Installer Terraform
+        uses: hashicorp/setup-terraform@dfe3c3f87815947d99a8997f908cb6525fc44e9e # v4.0.1
+        with:
+          terraform_version: 1.16.1
+          terraform_wrapper: false
+
+      - name: terraform init
+        working-directory: terraform/environments/dev
+        run: terraform init -input=false -no-color
+
+      - name: terraform plan
+        working-directory: terraform/environments/dev
+        run: terraform plan -input=false -no-color

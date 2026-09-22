@@ -3,8 +3,9 @@
 Réseau AWS sécurisé (VPC, subnets publics/privés, routage, Security Groups) construit avec Terraform, dans une démarche maîtrisée des coûts : aucune ressource facturable n'est créée par défaut, et chaque démonstration payante est suivie d'un nettoyage vérifié.
 
 [![terraform-validate](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-validate.yml/badge.svg)](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-validate.yml)
+[![terraform-plan](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-plan.yml/badge.svg)](https://github.com/Aliyoub/terraform-aws-secure-network/actions/workflows/terraform-plan.yml)
 
-> **Statut :** phases 1 à 6 écrites (structure, VPC et subnets, routage, Security Groups, contrôles locaux, CI de validation). OIDC/IAM (Phase 7) et premier déploiement complet (Phase 8) à venir.
+> **Statut :** phases 1 à 7 terminées (structure, VPC et subnets, routage, Security Groups, contrôles locaux, CI de validation, authentification OIDC de la CI). Le workflow `terraform-plan` (Phase 8) authentifie la CI auprès d'AWS sans clé statique. Premier déploiement complet de `dev` à venir.
 
 ## Vue d'ensemble
 
@@ -37,19 +38,20 @@ Détails complets, plan d'adressage et justifications : [`docs/ARCHITECTURE.md`]
 - **Sécurité :** Security Groups en chaîne `alb → app → db`, référencés entre eux plutôt que par CIDR, aucun SSH exposé, groupe de sécurité et table de routage par défaut du VPC vidés.
 - **Infrastructure as Code :** modules Terraform réutilisables (`vpc`, `subnet`, `route-table`, `security-group`), variables validées, tags cohérents, `.terraform.lock.hcl` commité.
 - **Qualité et coûts :** `scripts/validate.sh` (fmt, validate, tflint, garde-fou de coût, recherche de secrets), testé avec des cas défectueux volontaires pour prouver qu'il détecte bien les problèmes.
-- **CI :** GitHub Actions exécute les mêmes contrôles à chaque push, sans accès AWS, avec des actions tierces épinglées sur un SHA de commit et des permissions en lecture seule.
+- **CI :** GitHub Actions exécute les mêmes contrôles à chaque push (`terraform-validate`, sans accès AWS) et un `terraform plan` réel contre le compte (`terraform-plan`), authentifié par OIDC sans aucune clé statique, avec un rôle IAM restreint à ce dépôt et en lecture seule. Actions tierces épinglées sur un SHA de commit, permissions minimales.
 - **Démarche :** chaque décision est documentée (ADR), chaque ressource payante potentielle listée avant création, chaque déploiement de démonstration suivi d'un `terraform destroy` vérifié indépendamment de l'état AWS.
 
 ## Structure du dépôt
 
 ```
 terraform/
-  modules/              vpc, subnet, route-table, security-group
-  environments/dev/     module racine de l'environnement dev
-docs/                   architecture, sécurité, décisions (coûts et dépannage à venir)
-screenshots/            preuves capturées au fil du projet
-scripts/                validate.sh, check-aws-cost-risk.sh (cleanup.sh à venir)
-.github/workflows/      CI (validate). Aucun apply automatique
+  modules/               vpc, subnet, route-table, security-group, github-oidc
+  environments/dev/      module racine de l'environnement réseau
+  environments/bootstrap/ fournisseur OIDC + rôle IAM de la CI (state séparé, ADR-016)
+docs/                    architecture, sécurité, décisions (coûts et dépannage à venir)
+screenshots/             preuves capturées au fil du projet
+scripts/                 validate.sh, check-aws-cost-risk.sh (cleanup.sh à venir)
+.github/workflows/       validate (aucun accès AWS) et plan (OIDC, lecture seule). Aucun apply automatique
 ```
 
 ## Documentation
@@ -83,9 +85,10 @@ terraform validate
 | 3 | Routage (IGW, tables) | ✅ (code) |
 | 4 | Security Groups | ✅ (code) |
 | 5 | Validation locale (tflint, scripts) | ✅ |
-| 6 | GitHub Actions | ✅ |
-| 7 | OIDC / IAM | à venir |
-| 8-13 | Déploiement, tests, troubleshooting, cleanup final | à venir |
+| 6 | GitHub Actions (validation) | ✅ |
+| 7 | OIDC / IAM | ✅ (déployé, preuve capturée) |
+| 8 | CI authentifiée (`terraform-plan`), déploiement contrôlé | en cours |
+| 9-13 | Tests réseau, troubleshooting, extensions, cleanup final | à venir |
 
 ## Auteur
 

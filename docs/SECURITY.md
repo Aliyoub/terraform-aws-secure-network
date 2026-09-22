@@ -143,3 +143,21 @@ L'ARN du rôle n'est pas un secret : seule une organisation GitHub qui contrôle
 **Pourquoi l'ID de compte est masqué.** Il n'est pas un secret exploitable seul (ce n'est ni une clé d'accès ni un mot de passe), mais il facilite le repérage et le ciblage d'un compte. Il est masqué dans les captures publiées par précaution, alors que le reste de la politique — sans valeur d'identification à lui seul — reste lisible.
 
 **Ce que ces captures prouvent ensemble.** Le fournisseur OIDC et le rôle existent réellement sur le compte AWS (et non seulement dans le code Terraform), avec exactement les restrictions décrites dans `ARCHITECTURE.md` et les ADR 016-017 : lecture seule, dépôt unique, aucune clé statique.
+
+## `terraform-plan.yml` : ce qu'il prouve, ce qu'il ne prouve pas
+
+Contrairement à `terraform-validate` (Phase 6), ce workflow authentifie la CI auprès d'AWS via OIDC pour exécuter un `terraform plan` réel sur `dev`.
+
+**Ce qu'il apporte réellement.** Le state étant local et non partagé avec la CI (ADR-003, ADR-018), ce plan repart toujours d'un état vide : il affichera "N ressources à créer" même si elles existent déjà sur AWS. Ce n'est donc pas un outil de détection de dérive. Sa valeur est ailleurs : il confirme que la configuration reste réellement déployable dans le compte et la région ciblés (résolution de `data "aws_availability_zones"`, permissions suffisantes, aucune erreur côté API), ce qu'un `validate` local, purement syntaxique, ne peut pas garantir.
+
+**Garde-fous appliqués :**
+
+| Mesure | Effet |
+|---|---|
+| Permissions du job : `contents: read`, `id-token: write` uniquement | Aucun droit d'écriture sur le dépôt ; le jeton OIDC n'est obtenu que pour ce job |
+| `if: ... head.repo.full_name == github.repository` | Une pull request depuis un fork ne peut jamais assumer le rôle AWS, en plus de la restriction `sub` de la politique de confiance (double protection) |
+| `mask-aws-account-id: true` | L'ID de compte AWS est masqué dans les logs du workflow |
+| ARN du rôle en variable de dépôt (`vars.AWS_OIDC_PLAN_ROLE_ARN`) | Le code du workflow ne dépend pas d'une valeur d'infrastructure codée en dur |
+| Aucun `terraform apply` | Ce workflow ne peut toujours rien déployer ni modifier |
+
+**Pour une vraie détection de dérive**, il faudrait un backend distant partagé (S3 avec verrouillage), qui n'est pas encore en place (ADR-003) : c'est une extension possible, à son tour soumise à sa propre analyse de coût avant création.
