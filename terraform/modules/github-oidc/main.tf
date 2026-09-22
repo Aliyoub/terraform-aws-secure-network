@@ -16,11 +16,21 @@ resource "aws_iam_openid_connect_provider" "github" {
 locals {
   oidc_provider_arn = var.create_oidc_provider ? aws_iam_openid_connect_provider.github[0].arn : var.existing_oidc_provider_arn
 
+  # Repo cible dans le claim "sub", avec ses identifiants immuables si fournis
+  # (repo:owner@owner_id/repo@repo_id, format utilisé par GitHub pour les dépôts créés
+  # après le 15/07/2026 ou ayant activé les "immutable subject claims" - voir
+  # var.github_owner_id). Sans ces identifiants, le format simple owner/repo est utilisé.
+  repo_claim = (
+    var.github_owner_id != null
+    ? "${var.github_organization}@${var.github_owner_id}/${var.github_repository}@${var.github_repository_id}"
+    : "${var.github_organization}/${var.github_repository}"
+  )
+
   # Motifs du claim "sub" du jeton GitHub Actions autorisés à endosser le rôle :
   # un par branche autorisée, plus un pour les pull requests si activées.
   sub_patterns = concat(
-    [for b in var.allowed_branches : "repo:${var.github_organization}/${var.github_repository}:ref:refs/heads/${b}"],
-    var.allow_pull_requests ? ["repo:${var.github_organization}/${var.github_repository}:pull_request"] : []
+    [for b in var.allowed_branches : "repo:${local.repo_claim}:ref:refs/heads/${b}"],
+    var.allow_pull_requests ? ["repo:${local.repo_claim}:pull_request"] : []
   )
 }
 

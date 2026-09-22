@@ -104,6 +104,16 @@
 - **Empreinte du certificat :** calculée le 22/09/2026 avec `openssl s_client -connect token.actions.githubusercontent.com:443 -showcerts`, en prenant l'empreinte SHA-1 du dernier certificat de la chaîne renvoyée par le serveur. Ma première tentative, écrite de mémoire, était fausse (39 caractères au lieu de 40) : `terraform validate` l'a détectée avant tout appel AWS, ce qui illustre l'intérêt de ce contrôle.
 - **Conséquences :** un fork du dépôt ou un autre dépôt ne peut pas endosser ce rôle. La liste d'actions doit être étendue au fur et à mesure des ressources ajoutées (jamais par anticipation). Le rôle ne permet aucun `apply`, en CI ou ailleurs : cette limite reste humaine.
 
+### Incident : premier claim "sub" incorrect, corrigé après le premier run CI
+
+Le premier déploiement (22/09/2026) restreignait `sub` au format simple `repo:Aliyoub/terraform-aws-secure-network:...`. Le premier run du workflow `terraform-plan` a échoué : `Not authorized to perform sts:AssumeRoleWithWebIdentity`.
+
+**Diagnostic :** une recherche dans CloudTrail (région `eu-west-3`, événements `AssumeRoleWithWebIdentity`, en lecture seule avec mes propres identifiants) a montré le claim réellement envoyé par GitHub : `repo:Aliyoub@25158336/terraform-aws-secure-network@1378078820:ref:refs/heads/main`. La documentation GitHub officielle confirme la cause : *« For repositories created after July 15, 2026 [...] the sub claim includes immutable owner and repository IDs »* ([oidc-in-aws](https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws)). Ce dépôt a été créé le 20/09/2026, donc après cette bascule.
+
+**Correction :** le module `github-oidc` accepte désormais `github_owner_id` et `github_repository_id` (optionnels), qui qualifient le claim `sub` avec les identifiants immuables quand ils sont fournis. Les valeurs utilisées (`25158336`, `1378078820`) ont été vérifiées par deux sources indépendantes : l'API GitHub (`gh api repos/.../... --jq '{owner_id:.owner.id, repo_id:.id}'`) et l'observation directe dans CloudTrail. `terraform apply` n'a modifié que la politique de confiance (0 création, 1 modification, 0 suppression). Le run suivant du workflow a réussi.
+
+**Leçon retenue :** vérifier le format réel du claim `sub` (CloudTrail ou un test manuel) avant de déployer une politique de confiance OIDC pour un nouveau dépôt, plutôt que de supposer le format documenté historiquement.
+
 ## ADR-018 : `terraform-plan.yml`, ses limites assumées et ses garde-fous
 
 - **Contexte :** le state de `dev` est local et jamais partagé avec la CI (ADR-003). Un `terraform plan` lancé sur un checkout GitHub neuf repart donc toujours d'un state vide.

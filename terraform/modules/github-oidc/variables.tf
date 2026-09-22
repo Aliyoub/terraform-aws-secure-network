@@ -47,6 +47,37 @@ variable "github_repository" {
   type        = string
 }
 
+variable "github_owner_id" {
+  description = <<-EOT
+    Identifiant numérique immuable du compte/organisation GitHub (ex. : 25158336),
+    obtenu via `gh api repos/<owner>/<repo> --jq .owner.id` ou observé dans les claims
+    réels d'un jeton via CloudTrail (evénement AssumeRoleWithWebIdentity, champ
+    userIdentity.principalId côté GitHub, ou Username sur l'événement).
+
+    Pour les dépôts créés après le 15 juillet 2026 (ou ayant activé les "immutable
+    subject claims"), GitHub inclut ces identifiants dans le claim "sub" du jeton OIDC :
+    repo:<owner>@<owner_id>/<repo>@<repo_id>:ref:refs/heads/<branche>
+    au lieu du format simple repo:<owner>/<repo>:ref:refs/heads/<branche>.
+    Source : https://docs.github.com/en/actions/how-tos/secure-your-work/security-harden-deployments/oidc-in-aws
+
+    Laisser null pour utiliser le format simple (dépôts créés avant cette bascule, ou
+    n'ayant pas activé les claims immuables).
+  EOT
+  type        = string
+  default     = null
+}
+
+variable "github_repository_id" {
+  description = "Identifiant numérique immuable du dépôt GitHub (ex. : 1378078820). Voir github_owner_id : les deux doivent être renseignés ensemble, ou aucun des deux."
+  type        = string
+  default     = null
+
+  validation {
+    condition     = (var.github_owner_id == null) == (var.github_repository_id == null)
+    error_message = "github_owner_id et github_repository_id doivent être renseignés ensemble, ou laissés tous les deux à null."
+  }
+}
+
 variable "allowed_branches" {
   description = "Branches depuis lesquelles un push peut endosser le rôle (ex. : [\"main\"]). Vide si seules les pull requests doivent être autorisées."
   type        = list(string)

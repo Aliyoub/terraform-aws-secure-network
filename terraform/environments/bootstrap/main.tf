@@ -34,10 +34,12 @@ module "github_actions_plan_role" {
 
   name_prefix = local.name_prefix
 
-  github_organization = var.github_organization
-  github_repository   = var.github_repository
-  allowed_branches    = ["main"]
-  allow_pull_requests = true
+  github_organization  = var.github_organization
+  github_repository    = var.github_repository
+  github_owner_id      = var.github_owner_id
+  github_repository_id = var.github_repository_id
+  allowed_branches     = ["main"]
+  allow_pull_requests  = true
 
   role_purpose      = "plan"
   role_description  = "Assume par GitHub Actions via OIDC - lecture seule pour terraform plan, aucun apply"

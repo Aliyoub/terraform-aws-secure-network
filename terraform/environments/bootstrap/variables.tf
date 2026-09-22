@@ -38,3 +38,15 @@ variable "github_repository" {
   type        = string
   default     = "terraform-aws-secure-network"
 }
+
+variable "github_owner_id" {
+  description = "Identifiant numérique immuable du compte GitHub Aliyoub, vérifié via `gh api repos/Aliyoub/terraform-aws-secure-network --jq .owner.id` et confirmé indépendamment dans CloudTrail (claim sub réel d'un jeton rejeté). Voir ADR-017 et modules/github-oidc pour le contexte."
+  type        = string
+  default     = "25158336"
+}
+
+variable "github_repository_id" {
+  description = "Identifiant numérique immuable du dépôt, vérifié via `gh api repos/Aliyoub/terraform-aws-secure-network --jq .id` et confirmé dans CloudTrail. Voir github_owner_id."
+  type        = string
+  default     = "1378078820"
+}
