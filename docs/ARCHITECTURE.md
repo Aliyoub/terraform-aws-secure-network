@@ -116,3 +116,17 @@ Un subnet est public parce que **sa table de routage** contient une route `0.0.0
 ### Ce que le routage ne suffit pas à garantir
 
 Une route vers l'IGW est nécessaire mais pas suffisante pour exposer une ressource : il faut aussi une IP publique (l'attribution automatique est désactivée, ADR-006) et des règles de Security Group qui autorisent le trafic (Phase 4). Ces trois couches se cumulent.
+
+### Preuve de déploiement : contenu réel des tables de routage
+
+![Table de routage publique : deux routes, dont 0.0.0.0/0 vers l'Internet Gateway](../screenshots/07-route-table-public.png)
+
+*Console AWS, VPC → Tables de routage → `terraform-aws-secure-network-dev-public-rt`, onglet « Routes ».*
+
+![Table de routage privée : une seule route, locale au VPC](../screenshots/08-route-table-private.png)
+
+*Même écran, table `terraform-aws-secure-network-dev-private-rt`.*
+
+**Ce que montrent ces deux captures.** La table publique contient 2 routes : `10.20.0.0/16 → local` (ajoutée automatiquement par AWS) et `0.0.0.0/0 → igw-0f039d3a4008c166a`, ajoutée explicitement par le module `route-table`. La table privée n'a que la première : aucune route ne mène en dehors du VPC. C'est la preuve concrète, sur l'infrastructure réellement déployée, de ce que la section précédente décrit en théorie.
+
+**Pourquoi deux captures et non une.** La console AWS n'affiche le contenu des routes que table par table (onglet « Routes » d'une table à la fois) : impossible de montrer les deux contenus dans un seul écran sans monter les images. Deux captures séparées, chacune complète et non retouchée, sont une preuve plus fiable qu'un montage.
