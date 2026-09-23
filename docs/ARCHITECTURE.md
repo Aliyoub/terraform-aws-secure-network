@@ -130,3 +130,28 @@ Une route vers l'IGW est nécessaire mais pas suffisante pour exposer une ressou
 **Ce que montrent ces deux captures.** La table publique contient 2 routes : `10.20.0.0/16 → local` (ajoutée automatiquement par AWS) et `0.0.0.0/0 → igw-0f039d3a4008c166a`, ajoutée explicitement par le module `route-table`. La table privée n'a que la première : aucune route ne mène en dehors du VPC. C'est la preuve concrète, sur l'infrastructure réellement déployée, de ce que la section précédente décrit en théorie.
 
 **Pourquoi deux captures et non une.** La console AWS n'affiche le contenu des routes que table par table (onglet « Routes » d'une table à la fois) : impossible de montrer les deux contenus dans un seul écran sans monter les images. Deux captures séparées, chacune complète et non retouchée, sont une preuve plus fiable qu'un montage.
+
+## Test d'isolation réseau (Phase 9)
+
+Les captures précédentes montrent la configuration à un instant donné. `scripts/network-isolation-check.sh` va plus loin : c'est un **test rejouable**, qui interroge le compte AWS réel et échoue si l'isolation n'est plus respectée, plutôt qu'une simple relecture visuelle.
+
+![Exécution de network-isolation-check.sh : les 4 vérifications passent](../screenshots/11-network-isolation-check.png)
+
+*Terminal, exécution de `scripts/network-isolation-check.sh` contre l'environnement `dev` déployé.*
+
+### Ce que vérifie le script
+
+| # | Vérification | Pourquoi |
+|---|---|---|
+| 1 | Aucune table de routage taguée `private` n'a de route `0.0.0.0/0` | C'est la définition même d'un subnet privé (voir ci-dessus) |
+| 2 | La table `public` route `0.0.0.0/0` vers un Internet Gateway (`igw-...`), pas un NAT ni une instance | Une route par défaut n'est sûre que si elle pointe vers la ressource attendue |
+| 3 | Les subnets `private` n'attribuent pas d'IP publique automatiquement (`MapPublicIpOnLaunch=False`) | Défense en profondeur avec le point 1 (ADR-006) |
+| 4 | Aucun Security Group du VPC n'autorise une entrée depuis `0.0.0.0/0`, et aucun n'ouvre le port 22 | Complète la preuve de routage par la couche pare-feu (Phase 4) |
+
+### Preuve que le test détecte vraiment une régression
+
+Un test qui ne renvoie jamais d'échec ne prouve rien (même principe qu'en Phase 5, ADR-014). Avant cette capture, j'ai ajouté une règle entrante `0.0.0.0/0:22` sur le Security Group `db`, relancé le script, vérifié qu'il détectait les **deux** anomalies (`0.0.0.0/0` et port 22), puis retiré la règle et confirmé avec `terraform plan` qu'aucune dérive ne subsistait (`No changes. Your infrastructure matches the configuration.`). Non vérifié : le comportement de ce script sur un compte avec plusieurs VPC du projet simultanément (il prend le premier VPC taggé trouvé) — situation qui ne se présente pas dans ce projet, mais une limite réelle à connaître avant réutilisation ailleurs.
+
+### Ce que ce test ne couvre pas
+
+Il ne remplace pas un test de connectivité réel (aucune requête réseau n'est émise : c'est une lecture de configuration, pas un `ping` ou un `curl`). Un test de bout en bout demanderait une instance EC2, une ressource payante non déployée par défaut dans ce projet (voir `docs/COSTS.md`).
