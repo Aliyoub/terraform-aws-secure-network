@@ -82,9 +82,12 @@ sg_ids=$(aws ec2 describe-security-groups --region "$region" \
   --query 'SecurityGroups[].GroupId' --output text)
 # --output text sépare les valeurs par des tabulations : tout espace blanc devient une virgule.
 sg_ids_csv=$(echo "$sg_ids" | tr -s '[:space:]' ',' | sed 's/,$//')
+# Projection explicite des champs affichés : ne jamais inclure GroupOwnerId (l'ID de
+# compte AWS), que describe-security-group-rules renvoie par défaut avec chaque règle.
+rule_fields='{SecurityGroupRuleId:SecurityGroupRuleId,GroupId:GroupId,Protocol:IpProtocol,FromPort:FromPort,ToPort:ToPort,CidrIpv4:CidrIpv4}'
 open_rules=$(aws ec2 describe-security-group-rules --region "$region" \
   --filters "Name=group-id,Values=${sg_ids_csv}" \
-  --query "SecurityGroupRules[?IsEgress==\`false\` && CidrIpv4=='0.0.0.0/0']" --output text)
+  --query "SecurityGroupRules[?IsEgress==\`false\` && CidrIpv4=='0.0.0.0/0'].${rule_fields}" --output text)
 if [[ -n "$open_rules" ]]; then
   fail "au moins une règle entrante autorise 0.0.0.0/0 (voir détail ci-dessus)"
   echo "$open_rules" >&2
@@ -93,7 +96,7 @@ else
 fi
 ssh_rules=$(aws ec2 describe-security-group-rules --region "$region" \
   --filters "Name=group-id,Values=${sg_ids_csv}" \
-  --query "SecurityGroupRules[?IsEgress==\`false\` && FromPort==\`22\`]" --output text)
+  --query "SecurityGroupRules[?IsEgress==\`false\` && FromPort==\`22\`].${rule_fields}" --output text)
 if [[ -n "$ssh_rules" ]]; then
   fail "au moins une règle entrante ouvre le port 22 (SSH)"
 else
