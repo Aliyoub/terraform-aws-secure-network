@@ -29,3 +29,17 @@ Six extensions optionnelles, toutes désactivées par défaut (`var.enable_...` 
 **Un vrai bug d'API trouvé et corrigé.** Le premier `terraform apply` a échoué à la création de l'instance : `InvalidBlockDeviceMapping: Volume of size 8GB is smaller than snapshot ... expect size >= 30GB`. L'AMI Amazon Linux 2023 la plus récente exige un volume racine d'au moins 30 Go. Ni `terraform validate` ni `terraform plan` n'avaient détecté cette contrainte : elle n'apparaît qu'au moment de l'appel réel `RunInstances`. Corrigé en portant `root_volume_size` à 30 (variable dédiée dans le module `ec2-instance`, avec une validation qui l'impose). Les 3 ressources IAM déjà créées lors du premier essai n'ont pas eu besoin d'être recréées : `terraform apply` n'a rejoué que la ressource manquante.
 
 **Coût :** 0,0118 $/heure pour l'instance, plus le stockage EBS (30 Go × 0,0928 $/Go-mois, négligeable pour la durée du test). Le rôle IAM est gratuit.
+
+## Étape 3/6 : NAT Gateway
+
+![Session Session Manager : curl réel vers Internet, HTTP 200](../screenshots/15-nat-connectivity-test.png)
+
+*Terminal, même instance qu'à l'étape 2, `curl https://www.example.com`.*
+
+**Ce que ça déploie.** Un NAT Gateway (Elastic IP `15.224.130.190`) dans le subnet public `a`, et une route ajoutée à la table privée : `0.0.0.0/0 → nat-0d6398254376377d2`. Une règle de sortie HTTPS a été ajoutée sur le groupe `app` vers `0.0.0.0/0`, explicitement, uniquement pour ce test (voir ADR-019).
+
+**Ce que la capture prouve.** La même instance qu'à l'étape 2, dans le même subnet privé, avec la même configuration réseau à l'exception de cette nouvelle route, peut désormais joindre Internet : `curl` renvoie `200`. Avant cette étape, aucune route de sortie n'existait sur la table privée (vérifié en Phases 9 et 10 avec `scripts/network-isolation-check.sh`) : la même requête aurait échoué.
+
+**Pourquoi c'est la preuve la plus significative de la Phase 9/11.** La Phase 9 avait explicitement écarté ce test faute d'instance EC2. C'est la première preuve de connectivité réelle (pas seulement une lecture de configuration) de tout le projet.
+
+**Coût :** 0,05 $/heure (NAT) + 0,005 $/heure (EIP) + 0,05 $/Go traité (trafic négligeable pour ce test).
