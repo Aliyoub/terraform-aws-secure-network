@@ -43,3 +43,19 @@ Six extensions optionnelles, toutes désactivées par défaut (`var.enable_...` 
 **Pourquoi c'est la preuve la plus significative de la Phase 9/11.** La Phase 9 avait explicitement écarté ce test faute d'instance EC2. C'est la première preuve de connectivité réelle (pas seulement une lecture de configuration) de tout le projet.
 
 **Coût :** 0,05 $/heure (NAT) + 0,005 $/heure (EIP) + 0,05 $/Go traité (trafic négligeable pour ce test).
+
+## Étape 4/6 : ALB
+
+![Requête HTTP complète via l'ALB : connexion, en-têtes, contenu, HTTP 200](../screenshots/16-alb-http-test.png)
+
+*Terminal, `curl -sv http://terraform-aws-secure-network-dev-1041201414.eu-west-3.elb.amazonaws.com/` depuis mon poste.*
+
+**Ce que ça déploie.** Un Application Load Balancer dans les subnets publics, un groupe de cibles sur le port 8080 (le serveur de démonstration de l'étape 2), et un listener HTTP (80). Une règle entrante a été ajoutée sur le groupe `alb`, explicitement, pour ce test.
+
+**Ce que la capture prouve.** Une requête réelle depuis un poste extérieur au VPC, en passant par la chaîne complète : Internet → ALB (subnet public) → groupe de cibles → instance (subnet privé, port 8080). Le corps de la réponse est celui posé par `user_data` en étape 2 : la même instance sert maintenant de cible à l'ALB, sans avoir été redéployée.
+
+**Vérification indépendante avant le test.** La cible du groupe est passée à `healthy` dès la première vérification (`aws elbv2 describe-target-health`), confirmant que le health check HTTP sur `/` fonctionne.
+
+**Pourquoi HTTP et non HTTPS.** Un certificat TLS réel demanderait un nom de domaine et une validation ACM, hors périmètre de ce portfolio (ADR-019). Le listener écoute donc en HTTP (80), avec le CIDR autorisé explicitement en dur pour ce test.
+
+**Coût :** 0,02646 $/heure + 0,0084 $/LCU-heure (négligeable pour ce test).
