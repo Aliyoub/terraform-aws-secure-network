@@ -59,3 +59,31 @@ Six extensions optionnelles, toutes désactivées par défaut (`var.enable_...` 
 **Pourquoi HTTP et non HTTPS.** Un certificat TLS réel demanderait un nom de domaine et une validation ACM, hors périmètre de ce portfolio (ADR-019). Le listener écoute donc en HTTP (80), avec le CIDR autorisé explicitement en dur pour ce test.
 
 **Coût :** 0,02646 $/heure + 0,0084 $/LCU-heure (négligeable pour ce test).
+
+## Étape 5/6 : RDS
+
+![Résultat de la commande SSM : connexion PostgreSQL réussie, version réelle retournée](../screenshots/17-rds-connectivity-test.png)
+
+*Terminal, `aws ssm get-command-invocation` sur la commande ayant exécuté `psql` depuis l'instance de démonstration.*
+
+**Ce que ça déploie.** Une instance RDS PostgreSQL (`db.t4g.micro`), dans les deux subnets privés, avec un mot de passe généré par Terraform (`random_password`, jamais écrit en dur), `skip_final_snapshot = true` et `backup_retention_period = 0` pour éviter tout stockage résiduel après suppression.
+
+**Ce que la capture prouve.** Un test de connexion réel, pas seulement une lecture de configuration : depuis l'instance EC2 (subnet privé, groupe `app`), installation de `postgresql15` puis `psql` vers l'instance RDS (subnet privé, groupe `db`), authentifié avec le mot de passe généré, exécutant `SELECT version();`. La réponse (`PostgreSQL 16.13...`) confirme que la chaîne `app_sg → db_sg` fonctionne réellement, pas seulement sur le papier.
+
+**Comment le mot de passe a été manipulé sans jamais apparaître à l'écran.** Récupéré depuis le state via `terraform show -json` dans une variable shell, transmis à la commande SSM sans être affiché, puis la capture finale ne montre que le résultat de la commande (`get-command-invocation`), jamais la commande d'origine contenant le mot de passe.
+
+**Coût :** 0,018 $/heure (instance) + stockage (20 Go × 0,133 $/Go-mois, négligeable pour ce test).
+
+## Étape 6/6 : VPC Flow Logs
+
+![CloudWatch Logs Insights : trafic réel capturé sur le NAT Gateway, 1323 enregistrements](../screenshots/18-vpc-flow-logs.png)
+
+*Console AWS, CloudWatch → Logs Insights, groupe `/terraform-aws-secure-network/dev/vpc-flow-logs`.*
+
+**Ce que ça déploie.** Les VPC Flow Logs (trafic `ALL`) vers un groupe CloudWatch Logs dédié (rétention 1 jour), avec un rôle IAM restreint à l'écriture dans ce seul groupe.
+
+**Ce que la capture prouve.** Du trafic réel, pas un VPC vide : 1 323 enregistrements capturés en moins d'une heure, généré par les étapes précédentes (curl via NAT, requêtes ALB, connexion RDS). La requête Logs Insights affiche les 20 plus récents : adresse source, destination, port, action.
+
+**Une observation honnête, pas anticipée.** Cette vue précise ne montre que des `ACCEPT`, contrairement à un autre flux du même groupe (celui de l'ALB) observé en CLI, qui contenait des `REJECT` sur des IP externes inconnues. La vue ci-dessus correspond au réseau du NAT Gateway (`10.20.1.53`), qui reçoit du trafic entrant non sollicité (bruit de fond Internet, sur des ports aléatoires) et le journalise en `ACCEPT` : **un NAT Gateway n'a pas de Security Group** comme une instance EC2 ou un ALB, le filtrage applicatif se fait différemment (absence de session sortante correspondante, pas de blocage explicite au niveau du flux). C'est une nuance réelle découverte en préparant cette capture, plus instructive qu'une preuve univoque.
+
+**Coût :** 0,50 $/Go ingéré (183,3 Ko scannés pour cette requête, donc négligeable) + 0,0315 $/Go-mois de stockage, rétention limitée à 1 jour.
