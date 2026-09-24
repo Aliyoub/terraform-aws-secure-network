@@ -157,7 +157,7 @@ Plan: 1 to add, 0 to change, 0 to destroy.
 
 ## Scénario 6 : ressource publique inaccessible malgré une configuration correcte
 
-**Non testé avec une ressource compute réelle.** Ce scénario demanderait une instance EC2 dans un subnet public, ressource payante non déployée par défaut dans ce projet (voir `docs/COSTS.md`, extensions de la Phase 11). Il est présenté ici comme un raisonnement structuré à partir de la configuration réelle de ce projet, utile en entretien.
+**Toujours non testé avec ce scénario précis.** La Phase 11 a bien déployé une instance EC2 réelle (voir `docs/EXTENSIONS.md`), mais dans un **subnet privé**, exposée uniquement via un ALB — jamais une instance dans un subnet public avec IP publique directe, qui est le scénario exact décrit ici. Il reste donc présenté comme un raisonnement structuré à partir de la configuration réelle de ce projet, utile en entretien, plutôt que comme un test réellement exécuté.
 
 **Symptôme hypothétique :** une instance dans un subnet public, avec une IP publique attribuée, reste injoignable en HTTPS depuis Internet.
 

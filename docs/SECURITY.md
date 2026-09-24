@@ -1,6 +1,6 @@
 # Sécurité
 
-> Document en construction. Cette version couvre les Security Groups et l'isolation réseau (Phases 3 et 4). L'authentification de la CI (OIDC), les permissions IAM et la chaîne d'approvisionnement seront ajoutées avec les phases correspondantes.
+> Ce document couvre les Security Groups et l'isolation réseau, l'authentification de la CI par OIDC, les permissions IAM et la chaîne d'approvisionnement GitHub Actions. Les rôles IAM créés pour les extensions optionnelles de la Phase 11 (administration EC2 via SSM, écriture des VPC Flow Logs) sont couverts dans leur propre section ci-dessous ; détail complet dans [`EXTENSIONS.md`](EXTENSIONS.md).
 
 ## Principes
 
@@ -21,7 +21,7 @@ Les groupes forment une chaîne `alb -> app -> db`. Un **Security Group est stat
 
 - **Références plutôt que CIDR :** une règle du type « depuis le groupe `alb` » suit les ressources, pas leurs adresses. Elle reste correcte si les IP changent et ne peut pas être élargie par erreur à un réseau entier.
 - **Aucun SSH :** aucune règle sur le port 22. Le module refuse à la validation tout SSH ou RDP ouvert à `0.0.0.0/0` et toute règle entrante « tous protocoles » (ADR-011).
-- **Administration :** AWS Systems Manager Session Manager, sans port entrant ni clé SSH. Il nécessite des VPC endpoints pour un subnet privé sans NAT (coût à évaluer en Phase 11).
+- **Administration :** AWS Systems Manager Session Manager, sans port entrant ni clé SSH. Il nécessite des VPC endpoints pour un subnet privé sans NAT (déployés et testés en Phase 11, voir ci-dessous).
 - **Sorties restreintes :** l'usage habituel d'un `0.0.0.0/0` en sortie est volontairement absent. Sans NAT, un subnet privé n'a de toute façon aucune route vers Internet ; les règles sortantes limitent en plus le trafic *interne*.
 
 ### Preuve de déploiement : la chaîne par référence, pas par CIDR
@@ -177,3 +177,14 @@ Contrairement à `terraform-validate` (Phase 6), ce workflow authentifie la CI a
 | Aucun `terraform apply` | Ce workflow ne peut toujours rien déployer ni modifier |
 
 **Pour une vraie détection de dérive**, il faudrait un backend distant partagé (S3 avec verrouillage), qui n'est pas encore en place (ADR-003) : c'est une extension possible, à son tour soumise à sa propre analyse de coût avant création.
+
+## Rôles IAM des extensions (Phase 11)
+
+Deux rôles IAM supplémentaires ont été créés pour les extensions optionnelles, tous deux distincts du rôle OIDC de la CI (aucun partage de permissions entre la CI et les ressources applicatives) :
+
+| Rôle | Assumé par | Permissions | Justification |
+|---|---|---|---|
+| `...-dev-ec2-ssm` | L'instance EC2 de démonstration (`ec2.amazonaws.com`) | `AmazonSSMManagedInstanceCore` (politique gérée AWS) | Permet l'administration via Session Manager, cohérent avec l'absence totale de SSH (ADR-011) |
+| `...-dev-flow-logs` | Le service VPC Flow Logs | Écriture restreinte au seul groupe CloudWatch Logs du projet | Un rôle plus large (accès à tous les groupes CloudWatch du compte) aurait été un excès de privilège pour un composant qui n'a besoin d'écrire qu'à un seul endroit |
+
+Les deux rôles ont été détruits avec le reste des extensions lors du cleanup final de la Phase 12, et leur absence a été vérifiée indépendamment (`aws iam list-roles`, filtré par nom).

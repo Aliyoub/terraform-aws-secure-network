@@ -1,6 +1,6 @@
 # Architecture réseau
 
-> Document en construction. Cette version couvre la Phase 2 (VPC, CIDR, zones de disponibilité, subnets). Le routage, les Security Groups et le diagramme complet seront ajoutés dans les phases suivantes.
+> Ce document couvre le réseau de base (VPC, CIDR, zones de disponibilité, subnets, routage) tel que déployé par défaut. Les six extensions optionnelles (NAT Gateway, VPC Endpoints, EC2, ALB, RDS, VPC Flow Logs), désactivées par défaut, sont documentées séparément dans [`EXTENSIONS.md`](EXTENSIONS.md) — chacune a été déployée, testée puis détruite ; aucune n'est active sur le compte AWS aujourd'hui.
 
 ## Vue d'ensemble (Phase 2)
 
@@ -155,3 +155,18 @@ Un test qui ne renvoie jamais d'échec ne prouve rien (même principe qu'en Phas
 ### Ce que ce test ne couvre pas
 
 Il ne remplace pas un test de connectivité réel (aucune requête réseau n'est émise : c'est une lecture de configuration, pas un `ping` ou un `curl`). Un test de bout en bout demanderait une instance EC2, une ressource payante non déployée par défaut dans ce projet (voir `docs/COSTS.md`).
+
+## Extensions optionnelles (Phase 11)
+
+Le réseau ci-dessus reste inchangé lorsque les extensions sont désactivées (`enable_... = false`, la valeur par défaut) : c'est la même architecture, avec exactement les mêmes 22 ressources en Phase 9-10. Six extensions ont ensuite été ajoutées par-dessus, une par une, chacune avec un test de fonctionnement réel plutôt qu'une simple création :
+
+| Extension | Ce qu'elle ajoute au réseau | Preuve réelle apportée |
+|---|---|---|
+| VPC Interface Endpoints | Accès privé à SSM depuis les subnets privés, sans sortie Internet | Prérequis de l'extension suivante |
+| EC2 (SSM uniquement) | Une instance dans un subnet privé, administrée sans SSH | Session Session Manager interactive |
+| NAT Gateway | Route de sortie Internet pour les subnets privés | `curl` réel depuis l'instance privée vers Internet, HTTP 200 |
+| ALB | Point d'entrée public vers l'instance privée (port 8080) | Requête HTTP complète depuis un poste extérieur au VPC |
+| RDS PostgreSQL | Base de données dans les subnets privés, accessible depuis `app` uniquement | Connexion `psql` réelle et requête SQL exécutée |
+| VPC Flow Logs | Journalisation du trafic réel généré par les 5 extensions précédentes | 1 323 enregistrements capturés et interrogés via CloudWatch Logs Insights |
+
+Détail complet de chaque étape (captures, coûts, explications techniques, un bug d'API réel trouvé et corrigé) : [`EXTENSIONS.md`](EXTENSIONS.md). Les six ont été détruites lors du cleanup final de la Phase 12, vérifié indépendamment.

@@ -60,6 +60,22 @@ Ce total ne compte pas le trafic de données, le stockage EBS/RDS, ni les sauveg
 | Exposition HTTP(S) | Application Load Balancer (0,02646 $/h) | Exposer directement une instance avec IP publique et Security Group restrictif | Moins résilient, pas de répartition de charge ; acceptable pour une démonstration ponctuelle |
 | Base de données | RDS (0,018 $/h + stockage) | Free Tier RDS si éligible (à vérifier sur le compte, ADR : ne jamais supposer son éligibilité, section 1 des règles du projet) | Le Free Tier RDS ne s'applique qu'aux nouveaux comptes et pour une durée limitée |
 
+## Coût réel de la démonstration des 6 extensions (24/09/2026)
+
+Contrairement à l'estimation illustrative ci-dessus (toutes les extensions actives un mois complet), voici le calcul basé sur la durée réelle de vie de chaque ressource, du déploiement (construction progressive, une extension ajoutée toutes les 20-40 minutes) au cleanup final terminé à 14h43 :
+
+| Extension | Créée vers (proxy : heure de la capture) | Détruite | Durée approximative | Coût approximatif |
+|---|---|---|---|---|
+| VPC Endpoints (×3) | 12h20 | 14h43 | ≈ 2,4 h | 0,011 $ × 3 × 2,4 ≈ **0,08 $** |
+| EC2 `t3.micro` | 12h41 | 14h43 | ≈ 2,0 h | 0,0118 $ × 2,0 ≈ **0,02 $** |
+| NAT Gateway + EIP | 13h15 | 14h43 | ≈ 1,5 h | (0,05 $ + 0,005 $) × 1,5 ≈ **0,08 $** |
+| ALB | 13h30 | 14h43 | ≈ 1,2 h | 0,02646 $ × 1,2 ≈ **0,03 $** |
+| RDS `db.t4g.micro` | 14h12 | 14h43 | ≈ 0,5 h | 0,018 $ × 0,5 ≈ **0,01 $** |
+| VPC Flow Logs | 14h31 | 14h43 | ≈ 0,2 h | volume négligeable (183 Ko scannés) ≈ **0,00 $** |
+| **Total approximatif** | | | | **≈ 0,22 $** |
+
+**Méthode et limites de cette estimation :** les heures de création utilisent l'horodatage des captures d'écran comme approximation (la ressource existait déjà quelques minutes avant, le temps de la tester) ; l'heure de destruction utilise l'horodatage de fin du log `terraform destroy` du cleanup final. Ce n'est **pas** un relevé de facturation AWS réel — la facturation AWS elle-même a un délai de plusieurs heures et facture au minimum à l'heure pleine pour certaines ressources (NAT Gateway, ALB, RDS, EC2 sont facturés à la seconde depuis 2017 après le premier minimum, mais toujours arrondis par AWS selon ses propres règles). Non vérifié : le montant exact qui apparaîtra sur la facture AWS Billing du compte pour cette période. Cette estimation confirme néanmoins l'ordre de grandeur annoncé (bien en dessous de 1 $), largement plus bas que le total mensuel illustratif ci-dessus, précisément parce que chaque extension n'a vécu que le temps de sa démonstration.
+
 ## Ce qui n'a pas été vérifié aujourd'hui
 
 - La tarification exacte de l'Elastic IP n'a pas pu être confirmée via l'API Price List pour `eu-west-3` spécifiquement (la requête est devenue trop volumineuse pour être traitée de façon fiable). Le chiffre cité (0,005 $/heure) vient de la page officielle `aws.amazon.com/vpc/pricing/`, qui précise explicitement que ce tarif s'applique à toutes les régions commerciales AWS.
