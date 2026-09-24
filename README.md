@@ -64,6 +64,7 @@ scripts/                 validate.sh, check-aws-cost-risk.sh (cleanup.sh à veni
 | [`docs/DECISIONS.md`](docs/DECISIONS.md) | Décisions d'architecture (ADR), avec leur contexte et leurs conséquences |
 | [`docs/COSTS.md`](docs/COSTS.md) | Tarifs AWS vérifiés (`eu-west-3`), niveaux de risque, alternatives moins coûteuses |
 | [`docs/TROUBLESHOOTING.md`](docs/TROUBLESHOOTING.md) | Scénarios de dépannage réels ou reproduits en direct (OIDC, drift Terraform, Security Group, routage) |
+| [`docs/EXTENSIONS.md`](docs/EXTENSIONS.md) | Extensions optionnelles (NAT, endpoints, EC2, ALB, RDS, Flow Logs), construites et testées progressivement |
 
 ## Utilisation
 

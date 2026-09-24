@@ -107,3 +107,50 @@ variable "alb_allowed_https_cidrs" {
     error_message = "Chaque entrée de alb_allowed_https_cidrs doit être un CIDR IPv4 valide."
   }
 }
+
+# --- Phase 11 : extensions optionnelles, toutes désactivées par défaut ---
+# Chaque interrupteur ajoute des ressources potentiellement payantes (voir docs/COSTS.md).
+# Aucune n'est jamais activée par défaut : elles ne le sont qu'explicitement,
+# le temps d'une démonstration, avec l'autorisation donnée avant chaque apply.
+
+variable "enable_nat_gateway" {
+  description = "Crée un NAT Gateway et route le subnet privé vers Internet à travers lui. Payant (0,05 $/h + traitement)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_vpc_endpoints" {
+  description = "Crée des VPC Interface Endpoints (ssm, ssmmessages, ec2messages) pour l'administration sans SSH. Payant (0,011 $/h par endpoint)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_ec2_demo" {
+  description = "Crée une instance EC2 de démonstration dans le subnet privé, administrable uniquement via Session Manager. Payant (0,0118 $/h)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_alb_demo" {
+  description = "Crée un Application Load Balancer exposant l'instance EC2 de démonstration en HTTP. Nécessite enable_ec2_demo. Payant (0,02646 $/h + LCU)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_rds_demo" {
+  description = "Crée une instance RDS PostgreSQL de démonstration dans les subnets privés. Payant (0,018 $/h + stockage)."
+  type        = bool
+  default     = false
+}
+
+variable "enable_flow_logs" {
+  description = "Active les VPC Flow Logs vers CloudWatch Logs. Payant (0,50 $/Go ingéré)."
+  type        = bool
+  default     = false
+}
+
+variable "alb_allowed_http_cidrs" {
+  description = "CIDR autorisés à joindre l'ALB de démonstration en HTTP (80). Vide par défaut : aucun accès tant que la démonstration n'est pas explicitement activée."
+  type        = list(string)
+  default     = []
+}
